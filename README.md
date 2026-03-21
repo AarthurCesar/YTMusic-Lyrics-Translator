@@ -6,6 +6,12 @@ A browser extension for **Opera, Chrome, Edge and Brave** that displays YouTube 
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-purple)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+## 📸 Screenshots
+
+| In YouTube Music | Extension Popup |
+|:---:|:---:|
+| ![Site](assets/screenshot-site.png) | ![Popup](assets/screenshot-popup.png) |
+
 ## ✨ Features
 
 - Automatic lyrics translation directly in the YouTube Music lyrics panel
