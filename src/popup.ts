@@ -1,7 +1,7 @@
 import { t } from './i18n';
 
-const DEFAULT_ORIG      = '#ffffff';
-const DEFAULT_TRANS     = '#7a7a7a';
+const DEFAULT_ORIG       = '#ffffff';
+const DEFAULT_TRANS      = '#7a7a7a';
 const DEFAULT_SIZE_ORIG  = 14;
 const DEFAULT_SIZE_TRANS = 13;
 
@@ -34,6 +34,7 @@ async function loadColors() {
   (document.getElementById('size-trans') as HTMLInputElement).value = String(sizeTrans);
   document.getElementById('size-orig-val')!.textContent  = `${sizeOrig}px`;
   document.getElementById('size-trans-val')!.textContent = `${sizeTrans}px`;
+
 }
 
 async function saveDisplayMode() {
@@ -88,11 +89,11 @@ async function refresh() {
   }
 
   noSong.style.display = 'none';
-  playerUI.style.display = '';
+  playerUI.style.display = document.body.classList.contains('detached') ? 'flex' : '';
 
-  // Limpa cache do lyricsEl se status mudou para loading (nova música)
+  // Limpa cache quando status muda
   const lyricsEl2 = document.getElementById('lyrics')!;
-  if (info.lyricsStatus === 'loading' && lyricsEl2.dataset.cacheKey !== 'loading') {
+  if (info.lyricsStatus !== 'ready' && lyricsEl2.dataset.cacheKey && lyricsEl2.dataset.cacheKey !== info.lyricsStatus) {
     lyricsEl2.dataset.cacheKey = '';
   }
 
@@ -103,8 +104,10 @@ async function refresh() {
   const cur = timeToSeconds(info.currentTime);
   const tot = timeToSeconds(info.totalTime);
   const pct = tot > 0 ? (cur / tot) * 100 : 0;
-  (document.getElementById('progress-fill') as HTMLElement).style.width = `${pct}%`;
-  document.getElementById('time-current')!.textContent = info.currentTime;
+  if (!seeking && !seekCooldown) {
+    (document.getElementById('progress-fill') as HTMLElement).style.width = `${pct}%`;
+    document.getElementById('time-current')!.textContent = info.currentTime;
+  }
   document.getElementById('time-total')!.textContent = info.totalTime;
 
   const playBtn = document.getElementById('btn-play')!;
@@ -118,9 +121,11 @@ async function refresh() {
 
   const lyricsEl = document.getElementById('lyrics')!;
   if (info.lyrics && info.lyricsStatus === 'ready') {
-    if (lyricsEl.dataset.cacheKey !== info.lyrics.slice(0, 40)) {
+    // Usa tamanho + snippet do meio como cache key (detecta mudanças de estilo)
+    const key = `${info.lyrics.length}:${info.lyrics.slice(50, 120)}`;
+    if (lyricsEl.dataset.cacheKey !== key) {
       lyricsEl.innerHTML = info.lyrics;
-      lyricsEl.dataset.cacheKey = info.lyrics.slice(0, 40);
+      lyricsEl.dataset.cacheKey = key;
     }
   } else if (info.lyricsStatus === 'loading') {
     if (lyricsEl.dataset.cacheKey !== 'loading') {
@@ -148,9 +153,69 @@ document.getElementById('btn-play')!.addEventListener('click', () => sendControl
 document.getElementById('btn-prev')!.addEventListener('click', () => sendControl('prev'));
 document.getElementById('btn-next')!.addEventListener('click', () => sendControl('next'));
 
+// ── Seek by click + drag on progress bar ────────────────────────────────────
+const progressBar = document.querySelector('.progress-bg') as HTMLElement;
+let seeking = false;
+let seekCooldown = false;
+
+async function seekToPosition(clientX: number) {
+  const rect = progressBar.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  // Atualiza visual imediatamente
+  (document.getElementById('progress-fill') as HTMLElement).style.width = `${pct * 100}%`;
+  const data = await chrome.storage.local.get('songInfo');
+  const info = data['songInfo'] as { totalTime: string } | undefined;
+  if (!info?.totalTime) return;
+  const total = timeToSeconds(info.totalTime);
+  if (total > 0) {
+    const secs = Math.floor(pct * total);
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    document.getElementById('time-current')!.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+    sendControl('seekTo', { seconds: secs });
+  }
+}
+
+progressBar.addEventListener('pointerdown', (e) => {
+  seeking = true;
+  progressBar.setPointerCapture(e.pointerId);
+  seekToPosition(e.clientX);
+  e.preventDefault();
+});
+
+progressBar.addEventListener('pointermove', (e) => {
+  if (!seeking) return;
+  seekToPosition(e.clientX);
+});
+
+progressBar.addEventListener('pointerup', () => {
+  seeking = false;
+  seekCooldown = true;
+  setTimeout(() => { seekCooldown = false; }, 1500);
+});
+
+
+
 document.getElementById('lang-select')!.addEventListener('change', e => {
   const lang = (e.target as HTMLSelectElement).value;
   sendControl('setLang', { lang });
+});
+
+// ── Pop out: abre popup como janela independente ─────────────────────────────
+document.getElementById('btn-popout')!.addEventListener('click', async () => {
+  const w = 360;
+  const h = 640;
+  const left = Math.round((window.screen.availWidth  - w) / 2);
+  const top  = Math.round((window.screen.availHeight - h) / 2);
+  chrome.windows.create({
+    url: chrome.runtime.getURL('popup.html') + '?detached=1',
+    type: 'popup',
+    width: w,
+    height: h,
+    left,
+    top,
+  });
+  window.close();
 });
 
 // ── Settings panel ──────────────────────────────────────────────────────────
@@ -203,6 +268,23 @@ document.getElementById('btn-reset-colors')!.addEventListener('click', async () 
   document.getElementById('size-orig-val')!.textContent  = `${DEFAULT_SIZE_ORIG}px`;
   document.getElementById('size-trans-val')!.textContent = `${DEFAULT_SIZE_TRANS}px`;
 });
+
+// Detecta janela destacada (largura maior que popup padrão)
+// Detecta modo destacado via parâmetro de URL (confiável)
+if (new URLSearchParams(location.search).has('detached')) {
+  document.body.classList.add('detached');
+  // Mostra botão de reload apenas na janela destacada
+  const reloadBtn = document.getElementById('btn-reload-detached')!;
+  reloadBtn.style.display = 'block';
+  reloadBtn.addEventListener('click', () => location.reload());
+  // Escala das letras proporcional à largura da janela
+  function updateLyricsScale() {
+    const scale = Math.min(2.5, Math.max(1, window.innerWidth / 320));
+    document.documentElement.style.setProperty('--lyrics-scale', String(scale));
+  }
+  updateLyricsScale();
+  window.addEventListener('resize', updateLyricsScale);
+}
 
 applyI18n();
 loadColors();

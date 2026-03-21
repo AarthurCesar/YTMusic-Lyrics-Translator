@@ -6,12 +6,41 @@
   <style>
     @keyframes spin { to { transform: rotate(360deg); } }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      width: 320px;
+    html, body {
+      margin: 0; padding: 0;
       background: #0f0f0f;
       color: #fff;
       font-family: 'Roboto', sans-serif;
       font-size: 13px;
+    }
+    /* Popup normal: tamanho definido pelo conteúdo */
+    #app-root {
+      width: 320px;
+      display: flex; flex-direction: column;
+    }
+    /* Janela destacada: preenche tudo responsivamente */
+    body.detached {
+      width: 100vw; height: 100vh;
+      overflow: hidden;
+    }
+    body.detached #app-root {
+      width: 100%; height: 100vh;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    body.detached #player-ui {
+      flex: 1; display: flex; flex-direction: column;
+      overflow: hidden; min-height: 0;
+    }
+    body.detached .lyrics-section {
+      flex: 1; min-height: 0; height: 0;
+      font-size: calc(13px * var(--lyrics-scale, 1));
+    }
+    body.detached .lyrics-section div[style*="font-size"] {
+      font-size: inherit !important;
+    }
+    body.detached .lyrics-section div[style*="italic"] {
+      font-size: calc(0.93em) !important;
     }
     .header {
       padding: 10px 14px;
@@ -56,14 +85,31 @@
     /* ── Progress ── */
     .progress-section { padding: 0 14px 6px; }
     .progress-bg {
-      height: 3px; background: rgba(255,255,255,0.15);
-      border-radius: 2px; cursor: pointer;
+      height: 5px; background: rgba(255,255,255,0.15);
+      border-radius: 3px; cursor: pointer;
+      transition: height 0.15s;
+      position: relative;
+      touch-action: none;
     }
+    .progress-bg:hover { height: 8px; }
+    .progress-bg:hover .progress-thumb { opacity: 1; transform: translateY(-50%) scale(1); }
     .progress-fill {
       height: 100%;
       background: linear-gradient(90deg, #8A5CFF, #4A90E2, #5EDCFF);
-      border-radius: 2px;
-      transition: width 0.8s linear;
+      border-radius: 3px;
+      transition: width 0.3s linear;
+      position: relative;
+    }
+    .progress-bg:active .progress-fill { transition: none; }
+    .progress-thumb {
+      position: absolute; right: -6px; top: 50%;
+      transform: translateY(-50%) scale(0);
+      width: 12px; height: 12px; border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 4px rgba(0,0,0,0.4);
+      opacity: 0;
+      transition: opacity 0.15s, transform 0.15s;
+      pointer-events: none;
     }
     .time-row {
       display: flex; justify-content: space-between;
@@ -117,8 +163,9 @@
     /* ── Lyrics ── */
     .lyrics-section {
       border-top: 1px solid rgba(255,255,255,0.08);
-      max-height: 280px; overflow-y: auto;
+      flex: 1; overflow-y: auto;
       padding: 12px 14px;
+      min-height: 80px;
     }
     .lyrics-section::-webkit-scrollbar { width: 3px; }
     .lyrics-section::-webkit-scrollbar-thumb {
@@ -134,11 +181,20 @@
   </style>
 </head>
 <body>
+  <div id="app-root">
   <div class="header">
     <span class="header-icon">♫</span>
     <span class="header-title">YTMusic Lyrics</span>
-    <button id="btn-settings" data-i18n-title="settings"
-      style="margin-left:auto;background:none;border:none;color:rgba(255,255,255,0.45);
+    <button id="btn-reload-detached"
+      title="Recarregar"
+      style="display:none;margin-left:auto;background:none;border:none;color:rgba(255,255,255,0.35);
+             cursor:pointer;font-size:14px;padding:2px 4px;line-height:1;transition:color 0.15s">↺</button>
+    <button id="btn-popout"
+      title="Abrir em janela separada"
+      style="margin-left:auto;background:none;border:none;color:rgba(255,255,255,0.35);
+             cursor:pointer;font-size:14px;padding:2px 4px;line-height:1;transition:color 0.15s">⧉</button>
+<button id="btn-settings" data-i18n-title="settings"
+      style="background:none;border:none;color:rgba(255,255,255,0.45);
              cursor:pointer;font-size:16px;padding:2px 4px;line-height:1;transition:color 0.15s">⚙</button>
   </div>
 
@@ -196,7 +252,7 @@
     <span id="no-song-text">Abra o YouTube Music<br>e toque uma música</span>
   </div>
 
-  <div id="player-ui" style="display:none">
+  <div id="player-ui" style="display:none;flex:1;flex-direction:column;overflow:hidden">
     <div class="player">
       <img id="thumb" src="" alt="capa" />
       <div class="song-info">
@@ -207,7 +263,9 @@
 
     <div class="progress-section">
       <div class="progress-bg">
-        <div id="progress-fill" class="progress-fill" style="width:0%"></div>
+        <div id="progress-fill" class="progress-fill" style="width:0%">
+          <div class="progress-thumb"></div>
+        </div>
       </div>
       <div class="time-row">
         <span id="time-current">0:00</span>
@@ -238,6 +296,7 @@
     <div id="lyrics" class="lyrics-section"></div>
   </div>
 
+  </div><!-- #app-root -->
   <script src="popup.js"></script>
 </body>
 </html>

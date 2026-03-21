@@ -200,6 +200,7 @@ async function processLyricsFromAPI(videoId: string) {
     translatedHtml = buildHtml(raw, translatedLines);
     lastCacheKey = cacheKey;
     lyricsStatus = 'ready';
+    updateOverlayContent();
 
     console.log('[YTLyrics] ✅ Letra via API:', nonEmpty.length, 'linhas');
 
@@ -338,6 +339,7 @@ async function processLyrics() {
     lastTranslatedLines = translatedLines;
     translatedHtml = buildHtml(originalText, translatedLines);
     lastCacheKey = cacheKey;
+    updateOverlayContent();
 
     showTranslated(el, translatedHtml);
     startProtecting(el);
@@ -508,12 +510,163 @@ setInterval(() => {
   if (!contextValid) return;
   const info = getSongInfo();
   if (info.title) safeStorageSet({ songInfo: info });
+  // Re-injeta overlay se sumiu por navegação SPA
+  if (overlayActive && !document.getElementById('ytmlt-overlay')) {
+    createOverlay();
+  }
 }, 1000);
+
+// ─── Overlay flutuante ────────────────────────────────────────────────────────
+
+let overlayActive = false;
+
+function createOverlay() {
+  if (document.getElementById('ytmlt-overlay')) return;
+
+  const ov = document.createElement('div');
+  ov.id = 'ytmlt-overlay';
+
+  // Wrapper interno para flex (o resize precisa estar no elemento externo com overflow:auto)
+  ov.innerHTML = `
+    <div id="ytmlt-ov-inner" style="
+      display:flex;flex-direction:column;width:100%;height:100%;
+      background:rgba(15,15,15,0.94);border-radius:10px;overflow:hidden;
+    ">
+      <div id="ytmlt-ov-header" style="
+        padding:8px 12px;display:flex;align-items:center;
+        justify-content:space-between;
+        border-bottom:1px solid rgba(255,255,255,0.08);
+        cursor:grab;flex-shrink:0;user-select:none;
+      ">
+        <span style="font-size:12px;font-weight:600;
+          background:linear-gradient(90deg,#8A5CFF,#5EDCFF);
+          -webkit-background-clip:text;-webkit-text-fill-color:transparent">
+          ♫ Lyrics
+        </span>
+        <button id="ytmlt-ov-close" style="
+          background:none;border:none;color:rgba(255,255,255,0.5);
+          cursor:pointer;font-size:13px;padding:0 2px;line-height:1
+        ">✕</button>
+      </div>
+      <div id="ytmlt-ov-body" style="
+        flex:1;overflow-y:auto;padding:10px 12px;
+        font-size:13px;line-height:1.6;
+      "></div>
+    </div>
+  `;
+
+  Object.assign(ov.style, {
+    position: 'fixed',
+    top: '80px',
+    right: '20px',
+    width: '320px',
+    height: '400px',
+    zIndex: '2147483647',
+    resize: 'both',
+    overflow: 'auto',
+    border: '1px solid rgba(255,255,255,0.12)',
+    borderRadius: '10px',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+    fontFamily: 'Roboto,sans-serif',
+    color: '#fff',
+    minWidth: '200px',
+    minHeight: '120px',
+  });
+
+  // Fechar
+  ov.querySelector('#ytmlt-ov-close')!.addEventListener('click', () => {
+    overlayActive = false;
+    safeStorageSet({ overlayVisible: false });
+    ov.remove();
+  });
+
+  // Drag pelo header
+  const header = ov.querySelector<HTMLElement>('#ytmlt-ov-header')!;
+  let dragging = false, ox = 0, oy = 0;
+  header.addEventListener('pointerdown', e => {
+    dragging = true;
+    ox = e.clientX - ov.getBoundingClientRect().left;
+    oy = e.clientY - ov.getBoundingClientRect().top;
+    header.style.cursor = 'grabbing';
+    header.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  header.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    ov.style.left  = `${e.clientX - ox}px`;
+    ov.style.top   = `${e.clientY - oy}px`;
+    ov.style.right = 'auto';
+  });
+  header.addEventListener('pointerup', () => {
+    dragging = false;
+    header.style.cursor = 'grab';
+    saveOverlayPos();
+  });
+
+  document.documentElement.appendChild(ov);
+  updateOverlayContent();
+
+  // Restaura posição/tamanho salvo
+  chrome.storage.local.get('overlayPos').then((data: Record<string, unknown>) => {
+    const p = data['overlayPos'] as { top?: string; left?: string; width?: string; height?: string } | undefined;
+    if (p?.top)    ov.style.top    = p.top;
+    if (p?.left)   { ov.style.left = p.left; ov.style.right = 'auto'; }
+    if (p?.width)  ov.style.width  = p.width;
+    if (p?.height) ov.style.height = p.height;
+  });
+
+  new ResizeObserver(() => saveOverlayPos()).observe(ov);
+}
+
+function saveOverlayPos() {
+  const ov = document.getElementById('ytmlt-overlay');
+  if (!ov) return;
+  const r = ov.getBoundingClientRect();
+  safeStorageSet({ overlayPos: {
+    top: ov.style.top, left: ov.style.left || `${r.left}px`,
+    width: `${r.width}px`, height: `${r.height}px`,
+  }});
+}
+
+function updateOverlayContent() {
+  const body = document.getElementById('ytmlt-ov-body');
+  if (!body) return;
+  if (translatedHtml) {
+    body.innerHTML = translatedHtml;
+  } else if (lyricsStatus === 'loading') {
+    body.innerHTML = '<div style="color:rgba(255,255,255,0.4);font-size:12px;text-align:center;padding:20px 0">Traduzindo...</div>';
+  } else {
+    body.innerHTML = '<div style="color:rgba(255,255,255,0.3);font-size:12px;text-align:center;padding:20px 0">Sem letra disponível</div>';
+  }
+}
+
+function toggleOverlay(visible: boolean) {
+  overlayActive = visible;
+  safeStorageSet({ overlayVisible: visible });
+  if (visible) {
+    createOverlay();
+  } else {
+    document.getElementById('ytmlt-overlay')?.remove();
+  }
+}
+
+// Restaura overlay se estava ativo
+chrome.storage.local.get('overlayVisible').then((data: Record<string, unknown>) => {
+  if (data['overlayVisible']) { overlayActive = true; createOverlay(); }
+});
 
 // ─── Mensagens do popup ───────────────────────────────────────────────────────
 
-chrome.runtime.onMessage.addListener((msg: { action: string; lang?: string }) => {
+chrome.runtime.onMessage.addListener((msg: { action: string; lang?: string; seconds?: number; visible?: boolean }) => {
   switch (msg.action) {
+    case 'toggleOverlay':
+      toggleOverlay(msg.visible ?? false);
+      break;
+    case 'seekTo': {
+      const video = document.querySelector<HTMLVideoElement>('video');
+      if (video && msg.seconds != null) video.currentTime = msg.seconds;
+      break;
+    }
     case 'play':
       getPlayPauseBtn()?.click();
       break;

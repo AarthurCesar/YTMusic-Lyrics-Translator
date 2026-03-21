@@ -3,7 +3,7 @@
   "name": "YTMusic Lyrics Translator",
   "version": "1.0.0",
   "description": "Mostra letra e tradução em tempo real no YouTube Music",
-  "permissions": ["storage", "scripting", "tabs"],
+  "permissions": ["storage", "scripting", "tabs", "windows"],
   "host_permissions": [
     "https://music.youtube.com/*",
     "https://translate.googleapis.com/*"
