@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <title>YTMusic Lyrics</title>
   <style>
+    @keyframes spin { to { transform: rotate(360deg); } }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       width: 320px;
@@ -136,35 +137,63 @@
   <div class="header">
     <span class="header-icon">♫</span>
     <span class="header-title">YTMusic Lyrics</span>
-    <button id="btn-settings" title="Configurações"
+    <button id="btn-settings" data-i18n-title="settings"
       style="margin-left:auto;background:none;border:none;color:rgba(255,255,255,0.45);
              cursor:pointer;font-size:16px;padding:2px 4px;line-height:1;transition:color 0.15s">⚙</button>
   </div>
 
   <div id="settings-panel" style="display:none;border-bottom:1px solid rgba(255,255,255,0.08);padding:12px 14px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <label style="font-size:12px;color:rgba(255,255,255,0.6)">Cor da letra original</label>
+      <label data-i18n="orig_color" style="font-size:12px;color:rgba(255,255,255,0.6)">Cor da letra original</label>
       <input type="color" id="color-orig" value="#ffffff"
         style="width:36px;height:26px;border:1px solid rgba(255,255,255,0.2);border-radius:4px;
                cursor:pointer;background:none;padding:1px 2px">
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <label style="font-size:12px;color:rgba(255,255,255,0.6)">Cor da tradução</label>
+      <label data-i18n="trans_color" style="font-size:12px;color:rgba(255,255,255,0.6)">Cor da tradução</label>
       <input type="color" id="color-trans" value="#7a7a7a"
         style="width:36px;height:26px;border:1px solid rgba(255,255,255,0.2);border-radius:4px;
                cursor:pointer;background:none;padding:1px 2px">
+    </div>
+    <div style="border-top:1px solid rgba(255,255,255,0.08);margin:10px 0;padding-top:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <label data-i18n="font_size_orig" style="font-size:12px;color:rgba(255,255,255,0.6)">Tamanho letra original</label>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="range" id="size-orig" min="10" max="50" value="14"
+            style="width:80px;accent-color:#8A5CFF;cursor:pointer">
+          <span id="size-orig-val" style="font-size:11px;color:rgba(255,255,255,0.4);width:26px">14px</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <label data-i18n="font_size_trans" style="font-size:12px;color:rgba(255,255,255,0.6)">Tamanho tradução</label>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="range" id="size-trans" min="10" max="50" value="13"
+            style="width:80px;accent-color:#8A5CFF;cursor:pointer">
+          <span id="size-trans-val" style="font-size:11px;color:rgba(255,255,255,0.4);width:26px">13px</span>
+        </div>
+      </div>
+    </div>
+    <div style="border-top:1px solid rgba(255,255,255,0.08);margin:10px 0;padding-top:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer" id="row-show-orig">
+        <input type="checkbox" id="show-orig" checked style="accent-color:#8A5CFF;cursor:pointer;width:14px;height:14px">
+        <label for="show-orig" data-i18n="show_orig" style="font-size:12px;color:rgba(255,255,255,0.6);cursor:pointer">Mostrar letra original</label>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;cursor:pointer" id="row-show-trans">
+        <input type="checkbox" id="show-trans" checked style="accent-color:#8A5CFF;cursor:pointer;width:14px;height:14px">
+        <label for="show-trans" data-i18n="show_trans" style="font-size:12px;color:rgba(255,255,255,0.6);cursor:pointer">Mostrar tradução</label>
+      </div>
     </div>
     <button id="btn-reset-colors"
       style="width:100%;padding:6px;background:rgba(255,255,255,0.07);
              border:1px solid rgba(255,255,255,0.12);border-radius:6px;
              color:rgba(255,255,255,0.65);font-size:12px;cursor:pointer">
-      ↺ Restaurar padrão
+      <span data-i18n="reset">↺ Restaurar padrão</span>
     </button>
   </div>
 
   <div id="no-song" class="no-song">
     <span class="no-song-icon">🎵</span>
-    Abra o YouTube Music<br>e toque uma música
+    <span id="no-song-text">Abra o YouTube Music<br>e toque uma música</span>
   </div>
 
   <div id="player-ui" style="display:none">
@@ -193,15 +222,16 @@
     </div>
 
     <div class="lang-row">
-      <label>Tradução:</label>
+      <label data-i18n="trans_label">Tradução:</label>
       <select id="lang-select">
+        <option value="auto">🌐 Auto</option>
         <option value="pt">Português</option>
         <option value="en">English</option>
         <option value="es">Español</option>
         <option value="fr">Français</option>
         <option value="de">Deutsch</option>
         <option value="ja">日本語</option>
-        <option value="off">Desligado</option>
+        <option value="off">Off</option>
       </select>
     </div>
 
