@@ -1,50 +1,57 @@
 # YTMusic Lyrics Translator
 
-Extensão para Opera/Chrome que exibe a letra das músicas do **YouTube Music** com tradução em tempo real — linha por linha, original em cima e tradução em baixo.
+A browser extension for **Opera, Chrome, Edge and Brave** that displays YouTube Music lyrics with real-time translation — line by line, original on top and translation below.
 
-## ✨ Funcionalidades
+![Chromium](https://img.shields.io/badge/Chromium-based-blue?logo=googlechrome)
+![Manifest V3](https://img.shields.io/badge/Manifest-V3-purple)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-- Tradução automática da letra diretamente no painel do YouTube Music
-- Suporte a 6 idiomas: Português, English, Español, Français, Deutsch, 日本語
-- Popup com mini player: capa, título, artista, progresso, play/pause/anterior/próxima
-- Personalização de cores da letra e da tradução
-- Funciona em qualquer aba (popup) sem precisar estar no YouTube Music
+## ✨ Features
 
-## 📦 Instalação (modo descompactado)
+- Automatic lyrics translation directly in the YouTube Music lyrics panel
+- Supports 6 languages: Portuguese, English, Spanish, French, German, Japanese
+- Popup mini player: album art, title, artist, progress bar, play/pause/prev/next controls
+- Customizable colors for original and translated lyrics
+- Works from any browser tab via the extension popup
 
-1. Baixe ou clone este repositório
-2. Instale as dependências e faça o build:
+## 📦 Installation (unpacked)
+
+1. Download or clone this repository
+2. Install dependencies and build:
    ```bash
    npm install
    npm run build
    ```
-3. Abra `opera://extensions` (ou `chrome://extensions`)
-4. Ative o **Modo de desenvolvedor**
-5. Clique em **Carregar extensão descompactada** e selecione a pasta `dist/`
+3. Open your browser's extensions page:
+   - Opera: `opera://extensions`
+   - Chrome: `chrome://extensions`
+   - Edge: `edge://extensions`
+4. Enable **Developer mode**
+5. Click **Load unpacked** and select the `dist/` folder
 
-## 🛠️ Desenvolvimento
+## 🛠️ Development
 
 ```bash
-npm install       # instala dependências
-npm run build     # compila para dist/
+npm install     # install dependencies
+npm run build   # compile to dist/
 ```
 
-Arquivos principais:
-- `src/content.ts` — lógica de tradução e injeção na página
-- `src/popup.ts` — lógica do popup (player + configurações)
-- `public/popup.html` — interface do popup
+Key files:
+- `src/content.ts` — translation logic and DOM injection
+- `src/popup.ts` — popup player and settings logic
+- `public/popup.html` — popup UI
 
-## 🌐 Idiomas suportados
+## 🌐 Supported Languages
 
-| Código | Idioma     |
-|--------|------------|
-| pt     | Português  |
-| en     | English    |
-| es     | Español    |
-| fr     | Français   |
-| de     | Deutsch    |
-| ja     | 日本語      |
+| Code | Language   |
+|------|------------|
+| pt   | Português  |
+| en   | English    |
+| es   | Español    |
+| fr   | Français   |
+| de   | Deutsch    |
+| ja   | 日本語      |
 
-## 📄 Licença
+## 📄 License
 
 MIT
