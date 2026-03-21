@@ -1,0 +1,161 @@
+#ytmlt-overlay {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  width: 360px;
+  max-height: 70vh;
+  background: rgba(15, 15, 15, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  z-index: 99999;
+  font-family: 'YouTube Sans', 'Roboto', sans-serif;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  overflow: hidden;
+  resize: horizontal;
+  min-width: 280px;
+}
+
+/* ── Header ── */
+#ytmlt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: grab;
+  user-select: none;
+  gap: 8px;
+}
+
+#ytmlt-header:active {
+  cursor: grabbing;
+}
+
+#ytmlt-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+#ytmlt-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+#ytmlt-lang {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 11px;
+  padding: 2px 4px;
+  cursor: pointer;
+  outline: none;
+}
+
+#ytmlt-lang option {
+  background: #222;
+  color: #fff;
+}
+
+#ytmlt-toggle,
+#ytmlt-close {
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  padding: 3px 7px;
+  cursor: pointer;
+  transition: background 0.15s;
+  line-height: 1;
+}
+
+#ytmlt-toggle:hover,
+#ytmlt-close:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+/* ── Body ── */
+#ytmlt-body {
+  overflow-y: auto;
+  max-height: calc(70vh - 48px);
+  padding: 12px 14px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.2) transparent;
+}
+
+#ytmlt-body::-webkit-scrollbar {
+  width: 4px;
+}
+#ytmlt-body::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 2px;
+}
+
+/* ── Status messages ── */
+#ytmlt-status {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+  padding: 20px 0;
+}
+
+#ytmlt-status.ytmlt-loading::before {
+  content: '⏳ ';
+}
+
+#ytmlt-status.ytmlt-error {
+  color: #ff6b6b;
+}
+
+/* ── Lyrics pairs ── */
+.ytmlt-pair {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ytmlt-pair:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.ytmlt-original {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #ffffff;
+  line-height: 1.5;
+}
+
+.ytmlt-translation {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+/* ── Active line highlight ── */
+.ytmlt-pair.active .ytmlt-original {
+  color: #ff0054;
+}
+
+.ytmlt-pair.active .ytmlt-translation {
+  color: rgba(255, 0, 84, 0.7);
+}

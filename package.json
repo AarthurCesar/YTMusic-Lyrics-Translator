@@ -1,0 +1,17 @@
+{
+  "name": "ytmusic-lyrics-translator",
+  "version": "1.0.0",
+  "description": "Chrome extension — letra + tradução em tempo real no YouTube Music",
+  "scripts": {
+    "build": "webpack --mode production",
+    "dev": "webpack --mode development --watch"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.254",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3",
+    "webpack": "^5.90.0",
+    "webpack-cli": "^5.1.4",
+    "copy-webpack-plugin": "^12.0.2"
+  }
+}
