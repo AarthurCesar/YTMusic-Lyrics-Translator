@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(npm run:*)",
-      "Bash(python3:*)",
-      "Bash(powershell -Command \"Compress-Archive -Path dist/* -DestinationPath ytmusic-lyrics-translator.zip -Force\")"
-    ]
-  }
-}
