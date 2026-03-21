@@ -6,7 +6,8 @@
   "permissions": ["storage", "scripting", "tabs", "windows"],
   "host_permissions": [
     "https://music.youtube.com/*",
-    "https://translate.googleapis.com/*"
+    "https://translate.googleapis.com/*",
+    "https://lrclib.net/*"
   ],
   "background": {
     "service_worker": "background.js"

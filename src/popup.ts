@@ -61,6 +61,31 @@ async function sendControl(action: string, extra?: Record<string, unknown>) {
   }
 }
 
+async function translateTitle(text: string, lang: string): Promise<string> {
+  if (!text || !lang || lang === 'off' || lang === 'auto') return text;
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${lang}&dt=t&q=${encodeURIComponent(text)}`;
+    const r = await fetch(url);
+    const d = await r.json();
+    return (d[0] as Array<[string]>).map(x => x[0]).join('') || text;
+  } catch { return text; }
+}
+
+let cachedTitleTranslation = { orig: '', lang: '', result: '' };
+
+async function getTranslatedTitle(title: string, lang: string): Promise<string> {
+  // For title in side-by-side mode, always translate; default to browser lang or 'pt'
+  const effectiveLang = (lang === 'auto' || lang === 'off' || !lang)
+    ? (navigator.language.split('-')[0] || 'pt')
+    : lang;
+  if (cachedTitleTranslation.orig === title && cachedTitleTranslation.lang === effectiveLang) {
+    return cachedTitleTranslation.result;
+  }
+  const result = await translateTitle(title, effectiveLang);
+  cachedTitleTranslation = { orig: title, lang: effectiveLang, result };
+  return result;
+}
+
 function timeToSeconds(t: string): number {
   const parts = t.split(':').map(Number);
   if (parts.length === 2) return parts[0] * 60 + parts[1];
@@ -69,6 +94,36 @@ function timeToSeconds(t: string): number {
 }
 
 let lastIsPlaying = false;
+let userScrolling = false;
+let scrollTimer: ReturnType<typeof setTimeout>;
+
+function highlightActiveLine(currentTimeStr: string) {
+  
+  const lyricsEl = document.getElementById('lyrics')!;
+  const timedDivs = lyricsEl.querySelectorAll<HTMLElement>('[data-start-ms]');
+  if (timedDivs.length === 0) return;
+
+  const currentMs = timeToSeconds(currentTimeStr) * 1000 + 1992; // compensate storage delay
+
+  let activeIdx = -1;
+  for (let i = 0; i < timedDivs.length; i++) {
+    const ms = parseInt(timedDivs[i].dataset.startMs || '0');
+    if (ms <= currentMs) activeIdx = i;
+    else break;
+  }
+
+  const prevActive = lyricsEl.querySelector('.active-line');
+  const newActive = activeIdx >= 0 ? timedDivs[activeIdx] : null;
+  if (prevActive === newActive) return;
+
+  prevActive?.classList.remove('active-line');
+  if (newActive) {
+    newActive.classList.add('active-line');
+    if (!userScrolling) {
+      newActive.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+}
 
 async function refresh() {
   const data = await chrome.storage.local.get('songInfo');
@@ -101,6 +156,7 @@ async function refresh() {
   document.getElementById('song-title')!.textContent = info.title;
   document.getElementById('song-artist')!.textContent = info.artist;
 
+
   const cur = timeToSeconds(info.currentTime);
   const tot = timeToSeconds(info.totalTime);
   const pct = tot > 0 ? (cur / tot) * 100 : 0;
@@ -124,7 +180,27 @@ async function refresh() {
     // Usa tamanho + snippet do meio como cache key (detecta mudanças de estilo)
     const key = `${info.lyrics.length}:${info.lyrics.slice(50, 120)}`;
     if (lyricsEl.dataset.cacheKey !== key) {
-      lyricsEl.innerHTML = info.lyrics;
+      const isSide = lyricsEl.classList.contains('side-by-side');
+      if (isSide) {
+        getTranslatedTitle(info.title, info.targetLang).then(translatedTitle => {
+          const songHeader = `
+            <div style="margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.1)">
+              <div style="display:flex;gap:0;align-items:flex-start">
+                <div style="flex:1;padding-right:12px;border-right:1px solid rgba(255,255,255,0.12);text-align:center">
+                  <div style="font-size:1.1em;font-weight:700;line-height:1.4">${info.title}</div>
+                  <div style="font-size:0.85em;color:rgba(255,255,255,0.5);margin-top:3px">${info.artist}</div>
+                </div>
+                <div style="flex:1;padding-left:12px;text-align:center">
+                  <div style="font-size:1.1em;font-weight:700;line-height:1.4">${translatedTitle}</div>
+                  <div style="font-size:0.85em;color:rgba(255,255,255,0.5);margin-top:3px">${info.artist}</div>
+                </div>
+              </div>
+            </div>`;
+          lyricsEl.innerHTML = songHeader + info.lyrics;
+        });
+      } else {
+        lyricsEl.innerHTML = info.lyrics;
+      }
       lyricsEl.dataset.cacheKey = key;
     }
   } else if (info.lyricsStatus === 'loading') {
@@ -146,6 +222,11 @@ async function refresh() {
       lyricsEl.innerHTML = `<div style="color:rgba(255,255,255,0.3);font-size:12px;text-align:center;padding:20px 0">${t('no_lyrics')}</div>`;
       lyricsEl.dataset.cacheKey = 'none';
     }
+  }
+
+  // Highlight synced lyrics
+  if (info.currentTime) {
+    highlightActiveLine(info.currentTime);
   }
 }
 
@@ -273,6 +354,27 @@ document.getElementById('btn-reset-colors')!.addEventListener('click', async () 
 // Detecta modo destacado via parâmetro de URL (confiável)
 if (new URLSearchParams(location.search).has('detached')) {
   document.body.classList.add('detached');
+
+  // Botão de layout lado a lado
+  const layoutBtn = document.getElementById('btn-layout')!;
+  layoutBtn.style.display = 'block';
+  const lyricsEl = document.getElementById('lyrics')!;
+
+  chrome.storage.local.get('lyricsLayout').then((data: Record<string, unknown>) => {
+    if (data['lyricsLayout'] === 'side') {
+      lyricsEl.classList.add('side-by-side');
+      layoutBtn.style.color = '#8A5CFF';
+    }
+  });
+
+  layoutBtn.addEventListener('click', async () => {
+    const isSide = lyricsEl.classList.toggle('side-by-side');
+    layoutBtn.style.color = isSide ? '#8A5CFF' : 'rgba(255,255,255,0.35)';
+    // Force re-render by clearing cache key
+    lyricsEl.dataset.cacheKey = '';
+    await chrome.storage.local.set({ lyricsLayout: isSide ? 'side' : 'stacked' });
+  });
+
   // Mostra botão de reload apenas na janela destacada
   const reloadBtn = document.getElementById('btn-reload-detached')!;
   reloadBtn.style.display = 'block';
@@ -285,6 +387,13 @@ if (new URLSearchParams(location.search).has('detached')) {
   updateLyricsScale();
   window.addEventListener('resize', updateLyricsScale);
 }
+
+// Detect user scrolling to pause auto-scroll
+document.getElementById('lyrics')!.addEventListener('scroll', () => {
+  userScrolling = true;
+  clearTimeout(scrollTimer);
+  scrollTimer = setTimeout(() => { userScrolling = false; }, 4000);
+}, { passive: true });
 
 applyI18n();
 loadColors();

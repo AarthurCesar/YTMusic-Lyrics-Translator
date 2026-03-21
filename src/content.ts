@@ -44,6 +44,65 @@ let showTrans  = true;
 let sizeOrig   = 14;
 let sizeTrans  = 13;
 
+// ─── Timed/synced lyrics ──────────────────────────────────────────────────────
+
+interface TimedLine {
+  startMs: number;
+  text: string;
+}
+
+let timedLines: TimedLine[] = [];
+
+function parseLRC(lrc: string): TimedLine[] {
+  const result: TimedLine[] = [];
+  for (const line of lrc.split('\n')) {
+    const match = line.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\]\s*(.*)/);
+    if (match) {
+      const text = match[4].trim();
+      if (!text) continue;
+      const min = parseInt(match[1]);
+      const sec = parseInt(match[2]);
+      const cs = match[3].length === 2 ? parseInt(match[3]) * 10 : parseInt(match[3]);
+      result.push({ startMs: min * 60000 + sec * 1000 + cs, text });
+    }
+  }
+  return result;
+}
+
+function parseTimeToSecs(t: string): number {
+  const parts = t.split(':').map(Number);
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  return 0;
+}
+
+async function fetchSyncedLyrics(title: string, artist: string, durationSecs: number): Promise<TimedLine[] | null> {
+  try {
+    // Clean artist name — YTM subtitle often includes "Artist • Album • Year"
+    const cleanArtist = artist.split('•')[0].trim().split('&')[0].trim();
+    const q = `${title} ${cleanArtist}`;
+    console.log('[YTLyrics] lrclib search:', q);
+    const r = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(q)}`);
+    if (!r.ok) { console.log('[YTLyrics] lrclib HTTP', r.status); return null; }
+    const results = await r.json() as Array<{ syncedLyrics?: string; trackName?: string; artistName?: string; duration?: number }>;
+    if (!results.length) { console.log('[YTLyrics] lrclib: no results'); return null; }
+    // Pick best match: has synced lyrics + closest duration
+    let best: typeof results[0] | null = null;
+    let bestDiff = Infinity;
+    for (const item of results) {
+      if (!item.syncedLyrics) continue;
+      const diff = Math.abs((item.duration || 0) - durationSecs);
+      if (diff < bestDiff) { bestDiff = diff; best = item; }
+    }
+    if (best?.syncedLyrics) {
+      console.log('[YTLyrics] lrclib match:', best.trackName, '-', best.artistName, `(Δ${bestDiff}s)`);
+      return parseLRC(best.syncedLyrics);
+    }
+    console.log('[YTLyrics] lrclib: no synced results among', results.length, 'hits');
+    return null;
+  } catch (e) { console.log('[YTLyrics] lrclib error:', e); return null; }
+}
+
 // Carrega configurações salvas
 chrome.storage.local.get(['lyricsColors', 'displayMode', 'targetLang', 'lyricsFontSize']).then((data: Record<string, unknown>) => {
   if (data['targetLang']) targetLang = data['targetLang'] as string;
@@ -80,7 +139,7 @@ chrome.storage.onChanged.addListener((changes: Record<string, chrome.storage.Sto
     rebuild = true;
   }
   if (rebuild && originalText && lastTranslatedLines.length > 0) {
-    translatedHtml = buildHtml(originalText, lastTranslatedLines);
+    translatedHtml = buildHtml(originalText, lastTranslatedLines, timedLines);
     const el = getLyricsEl();
     if (el) showTranslated(el, translatedHtml);
   }
@@ -178,18 +237,42 @@ async function processLyricsFromAPI(videoId: string) {
   isTranslating = true;
   lyricsStatus = 'loading';
   try {
-    const raw = await fetchLyricsFromYTM(videoId);
+    // Get song metadata for lrclib
+    const titleEl = document.querySelector<HTMLElement>('ytmusic-player-bar .content-info-wrapper .title');
+    const artistEl = document.querySelector<HTMLElement>('ytmusic-player-bar .content-info-wrapper .subtitle yt-formatted-string');
+    const timeEl = document.querySelector<HTMLElement>('ytmusic-player-bar .time-info');
+    const songTitle = titleEl?.textContent?.trim() || '';
+    const songArtist = artistEl?.textContent?.trim() || '';
+    const timeText = timeEl?.textContent?.trim() || '0:00 / 0:00';
+    const totalSecs = parseTimeToSecs(timeText.split('/')[1]?.trim() || '0:00');
+
+    // Fetch YTM lyrics + synced lyrics (lrclib) in parallel
+    const [raw, synced] = await Promise.all([
+      fetchLyricsFromYTM(videoId),
+      fetchSyncedLyrics(songTitle, songArtist, totalSecs),
+    ]);
 
     // Música mudou enquanto buscava — descarta
     if (videoId !== lastVideoId) return;
 
-    if (!raw || raw.length < 5) { lyricsStatus = 'none'; return; }
+    let lyricsText: string;
+    if (synced && synced.length > 0) {
+      timedLines = synced;
+      lyricsText = synced.map(l => l.text).join('\n');
+      console.log('[YTLyrics] ✅ Letras sincronizadas via lrclib:', synced.length, 'linhas');
+    } else if (raw && raw.length >= 5) {
+      timedLines = [];
+      lyricsText = raw;
+    } else {
+      lyricsStatus = 'none';
+      return;
+    }
 
-    const cacheKey = `${raw}::${effectiveLang()}`;
+    const cacheKey = `${lyricsText}::${effectiveLang()}`;
     if (cacheKey === lastCacheKey && translatedHtml) { lyricsStatus = 'ready'; return; }
 
-    originalText = raw;
-    const nonEmpty = raw.split('\n').filter((l: string) => l.trim());
+    originalText = lyricsText;
+    const nonEmpty = lyricsText.split('\n').filter((l: string) => l.trim());
     const translated = await translate(nonEmpty.join('\n'), effectiveLang());
 
     // Checa novamente após o translate (operação lenta)
@@ -197,12 +280,12 @@ async function processLyricsFromAPI(videoId: string) {
 
     const translatedLines = translated.split('\n');
     lastTranslatedLines = translatedLines;
-    translatedHtml = buildHtml(raw, translatedLines);
+    translatedHtml = buildHtml(lyricsText, translatedLines, timedLines);
     lastCacheKey = cacheKey;
     lyricsStatus = 'ready';
     updateOverlayContent();
 
-    console.log('[YTLyrics] ✅ Letra via API:', nonEmpty.length, 'linhas');
+    console.log('[YTLyrics] ✅ Letra traduzida:', nonEmpty.length, 'linhas');
 
     const el = getLyricsEl();
     if (el) { injectLangSelector(); showTranslated(el, translatedHtml); startProtecting(el); }
@@ -231,7 +314,7 @@ async function translate(text: string, lang: string): Promise<string> {
 
 // ─── Build HTML ───────────────────────────────────────────────────────────────
 
-function buildHtml(raw: string, translatedLines: string[]): string {
+function buildHtml(raw: string, translatedLines: string[], timed: TimedLine[] = []): string {
   const lines = raw.split('\n');
   let html = '';
   let i = 0;
@@ -240,10 +323,11 @@ function buildHtml(raw: string, translatedLines: string[]): string {
       html += `<div style="height:10px"></div>`;
     } else {
       const trans = escapeHtml(translatedLines[i]?.trim() || '');
+      const timeAttr = timed.length > 0 && i < timed.length ? ` data-start-ms="${timed[i].startMs}"` : '';
       i++;
       const origDiv  = showOrig  ? `<div style="color:${origColor};font-size:${sizeOrig}px;line-height:1.5">${escapeHtml(line)}</div>` : '';
       const transDiv = showTrans ? `<div style="color:${transColor};font-size:${sizeTrans}px;font-style:italic;line-height:1.4">${trans}</div>` : '';
-      if (origDiv || transDiv) html += `<div style="margin-bottom:14px">${origDiv}${transDiv}</div>`;
+      if (origDiv || transDiv) html += `<div${timeAttr} style="margin-bottom:14px;transition:opacity 0.3s;border-radius:6px;padding:2px 8px;margin-left:-8px;margin-right:-8px">${origDiv}${transDiv}</div>`;
     }
   }
   return html;
@@ -456,6 +540,7 @@ setInterval(() => {
     translatedHtml = '';
     originalText = '';
     isTranslating = false;
+    timedLines = [];
     lyricsStatus = vid ? 'loading' : 'idle';
     protectObserver?.disconnect();
     document.getElementById('ytmlt-lang-selector')?.remove();
@@ -514,6 +599,8 @@ setInterval(() => {
   if (overlayActive && !document.getElementById('ytmlt-overlay')) {
     createOverlay();
   }
+  // Highlight synced lyrics in overlay
+  if (overlayActive && timedLines.length > 0) highlightOverlayLine();
 }, 1000);
 
 // ─── Overlay flutuante ────────────────────────────────────────────────────────
@@ -626,6 +713,49 @@ function saveOverlayPos() {
     top: ov.style.top, left: ov.style.left || `${r.left}px`,
     width: `${r.width}px`, height: `${r.height}px`,
   }});
+}
+
+function highlightOverlayLine() {
+  const body = document.getElementById('ytmlt-ov-body');
+  if (!body) return;
+  const video = document.querySelector<HTMLVideoElement>('video');
+  if (!video) return;
+  const timedDivs = body.querySelectorAll<HTMLElement>('[data-start-ms]');
+  if (timedDivs.length === 0) return;
+
+  const currentMs = video.currentTime * 1000;
+  let activeIdx = -1;
+  for (let i = 0; i < timedDivs.length; i++) {
+    const ms = parseInt(timedDivs[i].dataset.startMs || '0');
+    if (ms <= currentMs) activeIdx = i;
+    else break;
+  }
+
+  const prev = body.querySelector('.active-line') as HTMLElement | null;
+  const next = activeIdx >= 0 ? timedDivs[activeIdx] : null;
+  if (prev === next) return;
+
+  // Dim all, highlight active
+  timedDivs.forEach(d => { d.style.opacity = timedLines.length > 0 ? '0.4' : '1'; });
+  prev?.classList.remove('active-line');
+  if (prev) {
+    prev.querySelectorAll('div').forEach((d, i) => {
+      d.style.color = i === 0 ? origColor : transColor;
+      d.style.background = '';
+      d.style.webkitBackgroundClip = '';
+      d.style.webkitTextFillColor = '';
+    });
+  }
+  if (next) {
+    next.classList.add('active-line');
+    next.style.opacity = '1';
+    next.querySelectorAll('div').forEach(d => {
+      d.style.background = 'linear-gradient(90deg, #8A5CFF, #4A90E2, #5EDCFF)';
+      d.style.webkitBackgroundClip = 'text';
+      d.style.webkitTextFillColor = 'transparent';
+    });
+    next.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 }
 
 function updateOverlayContent() {

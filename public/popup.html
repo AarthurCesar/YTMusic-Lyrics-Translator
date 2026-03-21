@@ -18,6 +18,28 @@
       width: 320px;
       display: flex; flex-direction: column;
     }
+    /* ── Layout lado a lado (só no flutuante) ── */
+    .lyrics-section.side-by-side > div[style] {
+      display: flex !important;
+      gap: 0;
+      align-items: flex-start;
+    }
+    .lyrics-section.side-by-side > div[style] > div:first-child {
+      flex: 1;
+      padding-right: 12px;
+      border-right: 1px solid rgba(255,255,255,0.12);
+      text-align: center;
+    }
+    .lyrics-section.side-by-side > div[style] > div:last-child {
+      flex: 1;
+      padding-left: 12px;
+      text-align: center;
+    }
+    /* separador de altura */
+    .lyrics-section.side-by-side > div[style*="height"] {
+      display: none !important;
+    }
+
     /* Janela destacada: preenche tudo responsivamente */
     body.detached {
       width: 100vw; height: 100vh;
@@ -172,6 +194,22 @@
       background: rgba(255,255,255,0.2); border-radius: 2px;
     }
 
+    /* ── Synced lyrics highlight ── */
+    [data-start-ms] {
+      transition: opacity 0.4s ease, background 0.3s ease;
+      opacity: 0.4;
+      border-radius: 6px;
+    }
+    [data-start-ms].active-line {
+      opacity: 1;
+    }
+    [data-start-ms].active-line div {
+      background: linear-gradient(90deg, #8A5CFF, #4A90E2, #5EDCFF) !important;
+      -webkit-background-clip: text !important;
+      -webkit-text-fill-color: transparent !important;
+      color: transparent !important;
+    }
+
     /* ── No song ── */
     .no-song {
       padding: 36px 16px; text-align: center;
@@ -185,15 +223,20 @@
   <div class="header">
     <span class="header-icon">♫</span>
     <span class="header-title">YTMusic Lyrics</span>
-    <button id="btn-reload-detached"
-      title="Recarregar"
-      style="display:none;margin-left:auto;background:none;border:none;color:rgba(255,255,255,0.35);
-             cursor:pointer;font-size:14px;padding:2px 4px;line-height:1;transition:color 0.15s">↺</button>
     <button id="btn-popout"
       title="Abrir em janela separada"
       style="margin-left:auto;background:none;border:none;color:rgba(255,255,255,0.35);
              cursor:pointer;font-size:14px;padding:2px 4px;line-height:1;transition:color 0.15s">⧉</button>
-<button id="btn-settings" data-i18n-title="settings"
+    <button id="btn-layout"
+      title="Alternar layout (lado a lado)"
+      style="display:none;background:none;border:none;color:rgba(255,255,255,0.35);
+             cursor:pointer;font-size:13px;padding:2px 5px;line-height:1;
+             transition:color 0.15s;letter-spacing:1px">⇔</button>
+    <button id="btn-reload-detached"
+      title="Recarregar"
+      style="display:none;background:none;border:none;color:rgba(255,255,255,0.35);
+             cursor:pointer;font-size:14px;padding:2px 4px;line-height:1;transition:color 0.15s">↺</button>
+    <button id="btn-settings" data-i18n-title="settings"
       style="background:none;border:none;color:rgba(255,255,255,0.45);
              cursor:pointer;font-size:16px;padding:2px 4px;line-height:1;transition:color 0.15s">⚙</button>
   </div>
@@ -293,7 +336,7 @@
       </select>
     </div>
 
-    <div id="lyrics" class="lyrics-section"></div>
+<div id="lyrics" class="lyrics-section"></div>
   </div>
 
   </div><!-- #app-root -->
