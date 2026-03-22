@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://*.ytimg.com https://*.googleusercontent.com https://*.ggpht.com; connect-src 'self' https://translate.googleapis.com;" />
   <title>YTMusic Lyrics</title>
   <style>
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -288,6 +289,17 @@
              color:rgba(255,255,255,0.65);font-size:12px;cursor:pointer">
       <span data-i18n="reset">↺ Restaurar padrão</span>
     </button>
+    <a href="https://ko-fi.com/artecodev" target="_blank" rel="noopener noreferrer"
+      style="display:flex;align-items:center;justify-content:center;gap:6px;
+             margin-top:10px;padding:7px;border-radius:6px;
+             background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+             color:rgba(255,255,255,0.45);font-size:11px;text-decoration:none;
+             transition:all 0.2s"
+      onmouseover="this.style.color='rgba(255,255,255,0.8)';this.style.background='rgba(138,92,255,0.12)';this.style.borderColor='rgba(138,92,255,0.3)'"
+      onmouseout="this.style.color='rgba(255,255,255,0.45)';this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.08)'">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      Support this project
+    </a>
   </div>
 
   <div id="no-song" class="no-song">

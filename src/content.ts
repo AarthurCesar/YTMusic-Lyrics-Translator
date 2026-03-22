@@ -85,7 +85,7 @@ interface LRCLibResult {
 async function fetchSyncedLyrics(title: string, artist: string, durationSecs: number): Promise<LRCLibResult> {
   try {
     // Clean artist name — take first artist only (split by •, &, "e", "and", feat, etc.)
-    const cleanArtist = artist.split('•')[0].trim().split(/\s*(?:&|,|\b(?:e|and|y|feat\.?|ft\.?|with|com|x)\b)\s*/i)[0].trim();
+    const cleanArtist = artist.split('•')[0].trim().split(/\s*(?:&|,)\s*|\s+(?:e|and|y|feat\.?|ft\.?|with|com|x)\s+/i)[0].trim();
     const q = `${title} ${cleanArtist}`;
     console.log('[YTLyrics] lrclib search:', q);
     const r = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(q)}`);
@@ -215,7 +215,7 @@ function bgFetch(url: string): Promise<{ ok: boolean; text: string }> {
 
 async function fetchLyricsFromGenius(title: string, artist: string): Promise<string | null> {
   try {
-    const cleanArtist = artist.split('•')[0].trim().split(/\s*(?:&|,|\b(?:e|and|y|feat\.?|ft\.?|with|com|x)\b)\s*/i)[0].trim();
+    const cleanArtist = artist.split('•')[0].trim().split(/\s*(?:&|,)\s*|\s+(?:e|and|y|feat\.?|ft\.?|with|com|x)\s+/i)[0].trim();
     const q = `${title} ${cleanArtist}`;
     console.log('[YTLyrics] Genius search:', q);
 
@@ -288,7 +288,7 @@ function letrasSlug(text: string): string {
 function splitArtists(artist: string): string[] {
   const clean = artist.split('•')[0].trim();
   // Split by common separators: &, "e" (PT), "and", "y" (ES), feat, ft, x, ,
-  const parts = clean.split(/\s*(?:&|,|\b(?:e|and|y|feat\.?|ft\.?|with|com|x)\b)\s*/i);
+  const parts = clean.split(/\s*(?:&|,)\s*|\s+(?:e|and|y|feat\.?|ft\.?|with|com|x)\s+/i);
   const seen = new Set<string>();
   const result: string[] = [];
   for (const p of parts) {

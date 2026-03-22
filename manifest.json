@@ -2,15 +2,18 @@
   "manifest_version": 3,
   "name": "YTMusic Lyrics Translator",
   "version": "1.0.0",
-  "description": "Mostra letra e tradução em tempo real no YouTube Music",
+  "description": "Real-time lyrics and translation overlay for YouTube Music. Fetches synced lyrics from multiple sources (LRCLib, Genius, Letras.com) and translates via Google Translate.",
   "permissions": ["storage", "scripting", "tabs", "windows"],
   "host_permissions": [
     "https://music.youtube.com/*",
-    "https://translate.googleapis.com/*",
-    "https://lrclib.net/*",
+    "https://translate.googleapis.com/translate_a/*",
+    "https://lrclib.net/api/*",
     "https://genius.com/*",
-    "https://www.letras.com/*"
+    "https://www.letras.com/*/*/"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
   "background": {
     "service_worker": "background.js"
   },
