@@ -14,3 +14,14 @@ async function injectIntoExistingTabs() {
 
 chrome.runtime.onInstalled.addListener(injectIntoExistingTabs);
 chrome.runtime.onStartup.addListener(injectIntoExistingTabs);
+
+// Proxy fetch for content scripts (bypasses CORS)
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg.type === 'fetch') {
+    fetch(msg.url, msg.options || {})
+      .then(r => r.text())
+      .then(text => sendResponse({ ok: true, text }))
+      .catch(err => sendResponse({ ok: false, error: String(err) }));
+    return true; // keep channel open for async response
+  }
+});

@@ -52,6 +52,7 @@ interface TimedLine {
 }
 
 let timedLines: TimedLine[] = [];
+let lyricsSource: 'ytm' | 'lrclib' | 'genius' | '' = '';
 
 function parseLRC(lrc: string): TimedLine[] {
   const result: TimedLine[] = [];
@@ -76,31 +77,38 @@ function parseTimeToSecs(t: string): number {
   return 0;
 }
 
-async function fetchSyncedLyrics(title: string, artist: string, durationSecs: number): Promise<TimedLine[] | null> {
+interface LRCLibResult {
+  synced: TimedLine[] | null;
+  plain: string | null;
+}
+
+async function fetchSyncedLyrics(title: string, artist: string, durationSecs: number): Promise<LRCLibResult> {
   try {
     // Clean artist name — YTM subtitle often includes "Artist • Album • Year"
     const cleanArtist = artist.split('•')[0].trim().split('&')[0].trim();
     const q = `${title} ${cleanArtist}`;
     console.log('[YTLyrics] lrclib search:', q);
     const r = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(q)}`);
-    if (!r.ok) { console.log('[YTLyrics] lrclib HTTP', r.status); return null; }
-    const results = await r.json() as Array<{ syncedLyrics?: string; trackName?: string; artistName?: string; duration?: number }>;
-    if (!results.length) { console.log('[YTLyrics] lrclib: no results'); return null; }
+    if (!r.ok) { console.log('[YTLyrics] lrclib HTTP', r.status); return { synced: null, plain: null }; }
+    const results = await r.json() as Array<{ syncedLyrics?: string; plainLyrics?: string; trackName?: string; artistName?: string; duration?: number }>;
+    if (!results.length) { console.log('[YTLyrics] lrclib: no results'); return { synced: null, plain: null }; }
     // Pick best match: has synced lyrics + closest duration
-    let best: typeof results[0] | null = null;
-    let bestDiff = Infinity;
+    let bestSynced: typeof results[0] | null = null;
+    let bestSyncedDiff = Infinity;
+    let bestPlain: typeof results[0] | null = null;
+    let bestPlainDiff = Infinity;
     for (const item of results) {
-      if (!item.syncedLyrics) continue;
       const diff = Math.abs((item.duration || 0) - durationSecs);
-      if (diff < bestDiff) { bestDiff = diff; best = item; }
+      if (item.syncedLyrics && diff < bestSyncedDiff) { bestSyncedDiff = diff; bestSynced = item; }
+      if (item.plainLyrics && diff < bestPlainDiff) { bestPlainDiff = diff; bestPlain = item; }
     }
-    if (best?.syncedLyrics) {
-      console.log('[YTLyrics] lrclib match:', best.trackName, '-', best.artistName, `(Δ${bestDiff}s)`);
-      return parseLRC(best.syncedLyrics);
-    }
-    console.log('[YTLyrics] lrclib: no synced results among', results.length, 'hits');
-    return null;
-  } catch (e) { console.log('[YTLyrics] lrclib error:', e); return null; }
+    const synced = bestSynced?.syncedLyrics ? parseLRC(bestSynced.syncedLyrics) : null;
+    const plain = bestPlain?.plainLyrics || null;
+    if (synced) console.log('[YTLyrics] lrclib synced match:', bestSynced!.trackName, '-', bestSynced!.artistName, `(Δ${bestSyncedDiff}s)`);
+    else if (plain) console.log('[YTLyrics] lrclib plain match:', bestPlain!.trackName, '-', bestPlain!.artistName, `(Δ${bestPlainDiff}s)`);
+    else console.log('[YTLyrics] lrclib: no lyrics among', results.length, 'hits');
+    return { synced, plain };
+  } catch (e) { console.log('[YTLyrics] lrclib error:', e); return { synced: null, plain: null }; }
 }
 
 // Carrega configurações salvas
@@ -184,6 +192,87 @@ function getShelf(): HTMLElement | null {
   return document.querySelector<HTMLElement>('ytmusic-description-shelf-renderer');
 }
 
+// ─── Genius fallback ──────────────────────────────────────────────────────────
+
+/** Fetch via background script to bypass CORS */
+function bgFetch(url: string): Promise<{ ok: boolean; text: string }> {
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage({ type: 'fetch', url }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.log('[YTLyrics] bgFetch error:', chrome.runtime.lastError.message);
+          resolve({ ok: false, text: '' });
+          return;
+        }
+        resolve(response || { ok: false, text: '' });
+      });
+    } catch (e) {
+      console.log('[YTLyrics] bgFetch exception:', e);
+      resolve({ ok: false, text: '' });
+    }
+  });
+}
+
+async function fetchLyricsFromGenius(title: string, artist: string): Promise<string | null> {
+  try {
+    const cleanArtist = artist.split('•')[0].trim().split('&')[0].trim();
+    const q = `${title} ${cleanArtist}`;
+    console.log('[YTLyrics] Genius search:', q);
+
+    const searchRes = await bgFetch(`https://genius.com/api/search/multi?q=${encodeURIComponent(q)}`);
+    if (!searchRes.ok) return null;
+    const searchData = JSON.parse(searchRes.text);
+
+    const sections = searchData?.response?.sections || [];
+    let songUrl: string | null = null;
+    for (const section of sections as Array<{ type?: string; hits?: Array<{ result?: { url?: string } }> }>) {
+      if (section.type === 'song' && section.hits?.length) {
+        songUrl = section.hits[0].result?.url || null;
+        break;
+      }
+    }
+    if (!songUrl) { console.log('[YTLyrics] Genius: no results'); return null; }
+
+    console.log('[YTLyrics] Genius page:', songUrl);
+    const pageRes = await bgFetch(songUrl);
+    if (!pageRes.ok) return null;
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(pageRes.text, 'text/html');
+    const containers = doc.querySelectorAll('[data-lyrics-container="true"]');
+    if (!containers.length) { console.log('[YTLyrics] Genius: no lyrics container found'); return null; }
+
+    let lyrics = '';
+    containers.forEach(container => {
+      let h = container.innerHTML;
+      h = h.replace(/<br\s*\/?>/gi, '\n');
+      h = h.replace(/<[^>]+>/g, '');
+      // Decode HTML entities
+      const textarea = document.createElement('textarea');
+      textarea.innerHTML = h;
+      h = textarea.value;
+      lyrics += (lyrics ? '\n' : '') + h;
+    });
+
+    // Clean up Genius artifacts
+    lyrics = lyrics
+      // Remove "N Contributors" prefix (can be glued to next text)
+      .replace(/\d+\s*Contributors?\s*/gi, '')
+      // Remove "Song Title Lyrics" header (can be glued to next text)
+      .replace(/^[^\n]*\bLyrics\s*/i, '')
+      .split('\n')
+      // Remove [Section] headers like [Verse 1], [Chorus], [Bridge], etc.
+      .filter(line => !/^\[.*\]$/.test(line.trim()))
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+    if (!lyrics || lyrics.length < 5) return null;
+
+    console.log('[YTLyrics] ✅ Genius lyrics found:', lyrics.split('\n').length, 'lines');
+    return lyrics;
+  } catch (e) { console.log('[YTLyrics] Genius error:', e); return null; }
+}
+
 // ─── YTMusic API ─────────────────────────────────────────────────────────────
 
 async function fetchLyricsFromYTM(videoId: string): Promise<string | null> {
@@ -230,6 +319,19 @@ async function fetchLyricsFromYTM(videoId: string): Promise<string | null> {
   }
 }
 
+/** Remove noise from video titles: [Lyric Video], (Official Audio), artist prefix, etc. */
+function cleanSongTitle(raw: string, artist: string): string {
+  let t = raw;
+  // Remove bracketed/parenthesized tags: [Lyric Video], (Official Audio), [Official Music Video], etc.
+  t = t.replace(/[\[\(]\s*(official\s*)?(lyric|music|audio|video|visualizer|hd|4k|lyrics)[\s\w]*[\]\)]/gi, '');
+  // Remove "Artist - " prefix if the title starts with the artist name
+  const cleanArtist = artist.split('•')[0].trim().split('&')[0].trim();
+  if (cleanArtist && t.toLowerCase().startsWith(cleanArtist.toLowerCase())) {
+    t = t.substring(cleanArtist.length).replace(/^\s*[-–—:]\s*/, '');
+  }
+  return t.trim();
+}
+
 async function processLyricsFromAPI(videoId: string) {
   if (isTranslating) return;
   if (effectiveLang() === 'off' || targetLang === 'off') { lyricsStatus = 'idle'; return; }
@@ -241,13 +343,15 @@ async function processLyricsFromAPI(videoId: string) {
     const titleEl = document.querySelector<HTMLElement>('ytmusic-player-bar .content-info-wrapper .title');
     const artistEl = document.querySelector<HTMLElement>('ytmusic-player-bar .content-info-wrapper .subtitle yt-formatted-string');
     const timeEl = document.querySelector<HTMLElement>('ytmusic-player-bar .time-info');
-    const songTitle = titleEl?.textContent?.trim() || '';
-    const songArtist = artistEl?.textContent?.trim() || '';
+    const rawTitle = titleEl?.textContent?.trim() || '';
+    const songArtistRaw = artistEl?.textContent?.trim() || '';
+    const songTitle = cleanSongTitle(rawTitle, songArtistRaw) || rawTitle;
+    const songArtist = songArtistRaw;
     const timeText = timeEl?.textContent?.trim() || '0:00 / 0:00';
     const totalSecs = parseTimeToSecs(timeText.split('/')[1]?.trim() || '0:00');
 
     // Fetch YTM lyrics + synced lyrics (lrclib) in parallel
-    const [raw, synced] = await Promise.all([
+    const [raw, lrcResult] = await Promise.all([
       fetchLyricsFromYTM(videoId),
       fetchSyncedLyrics(songTitle, songArtist, totalSecs),
     ]);
@@ -256,16 +360,34 @@ async function processLyricsFromAPI(videoId: string) {
     if (videoId !== lastVideoId) return;
 
     let lyricsText: string;
-    if (synced && synced.length > 0) {
-      timedLines = synced;
-      lyricsText = synced.map(l => l.text).join('\n');
-      console.log('[YTLyrics] ✅ Letras sincronizadas via lrclib:', synced.length, 'linhas');
+    if (lrcResult.synced && lrcResult.synced.length > 0) {
+      timedLines = lrcResult.synced;
+      lyricsText = lrcResult.synced.map(l => l.text).join('\n');
+      lyricsSource = 'lrclib';
+      console.log('[YTLyrics] ✅ Letras sincronizadas via lrclib:', lrcResult.synced.length, 'linhas');
     } else if (raw && raw.length >= 5) {
       timedLines = [];
       lyricsText = raw;
+      lyricsSource = 'ytm';
+    } else if (lrcResult.plain && lrcResult.plain.length >= 5) {
+      timedLines = [];
+      lyricsText = lrcResult.plain;
+      lyricsSource = 'lrclib';
+      console.log('[YTLyrics] ✅ Letras plain via lrclib');
     } else {
-      lyricsStatus = 'none';
-      return;
+      // Fallback: tenta Genius
+      console.log('[YTLyrics] YTM + lrclib falharam, tentando Genius...', { raw: raw?.substring(0, 50), syncedLen: lrcResult.synced?.length, plainLen: lrcResult.plain?.length });
+      const geniusLyrics = await fetchLyricsFromGenius(songTitle, songArtist);
+      console.log('[YTLyrics] Genius result:', geniusLyrics ? `${geniusLyrics.length} chars` : 'null');
+      if (videoId !== lastVideoId) return;
+      if (geniusLyrics) {
+        timedLines = [];
+        lyricsText = geniusLyrics;
+        lyricsSource = 'genius';
+      } else {
+        lyricsStatus = 'none';
+        return;
+      }
     }
 
     const cacheKey = `${lyricsText}::${effectiveLang()}`;
@@ -329,6 +451,11 @@ function buildHtml(raw: string, translatedLines: string[], timed: TimedLine[] = 
       const transDiv = showTrans ? `<div style="color:${transColor};font-size:${sizeTrans}px;font-style:italic;line-height:1.4">${trans}</div>` : '';
       if (origDiv || transDiv) html += `<div${timeAttr} style="margin-bottom:14px;transition:opacity 0.3s;border-radius:6px;padding:2px 8px;margin-left:-8px;margin-right:-8px">${origDiv}${transDiv}</div>`;
     }
+  }
+  // Show subtle source badge only when lyrics are NOT from YouTube
+  if (lyricsSource && lyricsSource !== 'ytm') {
+    const label = lyricsSource === 'genius' ? 'Genius' : 'LRCLib';
+    html += `<div style="text-align:right;margin-top:8px;font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:0.5px">via ${label}</div>`;
   }
   return html;
 }
@@ -541,6 +668,7 @@ setInterval(() => {
     originalText = '';
     isTranslating = false;
     timedLines = [];
+    lyricsSource = '';
     lyricsStatus = vid ? 'loading' : 'idle';
     protectObserver?.disconnect();
     document.getElementById('ytmlt-lang-selector')?.remove();
