@@ -22,6 +22,25 @@ A browser extension for **Opera, Chrome, Edge and Brave** that displays YouTube 
 
 ## 📦 Installation (unpacked)
 
+### Prerequisites — Node.js
+
+You need **Node.js** installed to build the extension.
+
+1. Download and install from [https://nodejs.org](https://nodejs.org) (LTS version recommended)
+2. After installing, open a terminal and verify:
+   ```bash
+   node -v
+   npm -v
+   ```
+
+> **Windows users:** if you get a script execution error when running `npm`, open **PowerShell as Administrator** and run:
+> ```powershell
+> Set-ExecutionPolicy RemoteSigned
+> ```
+> This allows locally-created scripts to run. Type **Y** to confirm.
+
+### Build and load
+
 1. Download or clone this repository
 2. Install dependencies and build:
    ```bash
