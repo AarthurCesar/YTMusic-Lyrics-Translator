@@ -8,7 +8,8 @@
     "https://music.youtube.com/*",
     "https://translate.googleapis.com/*",
     "https://lrclib.net/*",
-    "https://genius.com/*"
+    "https://genius.com/*",
+    "https://www.letras.com/*"
   ],
   "background": {
     "service_worker": "background.js"
